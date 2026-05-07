@@ -1,4 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+
+// Lazy: la página de Notas (voz + tags + análisis) se carga sólo al entrar.
+// Reduce el bundle inicial y acelera el primer paint en Android.
+const VoiceNotesPage = lazy(() => import("./voiceNotes.jsx"));
+const NotesSearchPage = lazy(() => import("./notesSearch.jsx"));
+const CycleTimelinePage = lazy(() => import("./timeline.jsx"));
+const SummaryPage = lazy(() => import("./summary.jsx"));
+
+import { useReducedMotion, isLowEndDevice, useIsMobile } from "./perf.jsx";
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -8156,6 +8165,14 @@ const NavIcon = ({ type, active, size = 20 }) => {
         fill={active ? T.gold : "none"} fillOpacity={active ? 0.3 : 0} />
     </svg>
   );
+  if (type === "notes") return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <rect {...props} x="6" y="3" width="12" height="18" rx="2" />
+      <path {...props} d="M 9 8 L 15 8" />
+      <path {...props} d="M 9 12 L 15 12" />
+      <path {...props} d="M 9 16 L 13 16" />
+    </svg>
+  );
   return null;
 };
 
@@ -8374,6 +8391,21 @@ export default function Aura() {
 
   const streak = calcStreak();
 
+  // Mapa exId → { name, day } para que la búsqueda etiquete cada sesión.
+  const workoutMap = useMemo(() => {
+    const m = {};
+    if (typeof WORKOUT_DAYS === "object" && WORKOUT_DAYS) {
+      for (const dayKey of Object.keys(WORKOUT_DAYS)) {
+        const day = WORKOUT_DAYS[dayKey];
+        const exs = (day && day.exercises) || [];
+        for (const ex of exs) {
+          if (ex && ex.id) m[ex.id] = { name: ex.name || ex.id, day: dayKey };
+        }
+      }
+    }
+    return m;
+  }, []);
+
   const [showSplash, setShowSplash] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -8423,6 +8455,82 @@ export default function Aura() {
                cycleHistory={cycleHistory}
                lastPeriod={lastPeriod}
                cycleType={cycleType} />,
+    notes: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando notas…</div>
+      }>
+        <VoiceNotesPage
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          onBack={goHome}
+          onOpenSearch={goSearch}
+          onOpenTimeline={goTimeline}
+          onOpenSummary={goSummary}
+        />
+      </Suspense>
+    ),
+    search: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando búsqueda…</div>
+      }>
+        <NotesSearchPage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          workoutMap={workoutMap}
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          onBack={goNotes}
+        />
+      </Suspense>
+    ),
+    timeline: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando línea de tiempo…</div>
+      }>
+        <CycleTimelinePage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          painLog={painLog}
+          cycleHistory={cycleHistory}
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          workoutMap={workoutMap}
+          onBack={goNotes}
+        />
+      </Suspense>
+    ),
+    summary: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando resumen…</div>
+      }>
+        <SummaryPage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          painLog={painLog}
+          cycleHistory={cycleHistory}
+          cycleType={cycleType}
+          onBack={goNotes}
+        />
+      </Suspense>
+    ),
   };
 
   const nav = [
@@ -8430,12 +8538,31 @@ export default function Aura() {
     { id: "gym", label: "Gym" },
     { id: "cycle", label: "Ciclo" },
     { id: "body", label: "Cuerpo" },
+    { id: "notes", label: "Notas" },
     { id: "challenges", label: "Retos" },
   ];
 
   const atmosphere = getAtmosphere();
   const appWeather = useWeather();
   const weatherInfo = appWeather ? decodeWeather(appWeather.code) : null;
+
+  // Gating de FX pesados: respeta prefers-reduced-motion y desactiva
+  // los blurs y partículas en móvil/low-end (filter:blur+radial son
+  // muy costosos en Android — pueden bajar el FPS de 60 a 20).
+  const reduceMotion = useReducedMotion();
+  const isMobile = useIsMobile(640);
+  const disableHeavyFx = useMemo(
+    () => reduceMotion || isMobile || isLowEndDevice(),
+    [reduceMotion, isMobile]
+  );
+
+  // Handlers de navegación memoizados para que botones inferiores no
+  // re-rendericen sin necesidad.
+  const goHome = useCallback(() => setPage("home"), []);
+  const goNotes = useCallback(() => setPage("notes"), []);
+  const goSearch = useCallback(() => setPage("search"), []);
+  const goTimeline = useCallback(() => setPage("timeline"), []);
+  const goSummary = useCallback(() => setPage("summary"), []);
 
   return (
     <div style={{
@@ -8444,23 +8571,38 @@ export default function Aura() {
       position: "relative",
       transition: "background 2s ease-in-out",
     }}>
-      {weatherInfo && <WeatherParticles mood={weatherInfo.particles} />}
-      <div style={{
-        position: "fixed", top: "-100px", right: "-100px",
-        width: 400, height: 400, borderRadius: "50%",
-        background: `radial-gradient(circle, ${atmosphere.glow}40 0%, transparent 70%)`,
-        filter: "blur(60px)",
-        pointerEvents: "none",
-        animation: "floatGlow 20s ease-in-out infinite",
-      }} />
-      <div style={{
-        position: "fixed", bottom: "-100px", left: "-100px",
-        width: 350, height: 350, borderRadius: "50%",
-        background: `radial-gradient(circle, ${T.accent}25 0%, transparent 70%)`,
-        filter: "blur(60px)",
-        pointerEvents: "none",
-        animation: "floatGlow 25s ease-in-out infinite reverse",
-      }} />
+      {weatherInfo && !disableHeavyFx && <WeatherParticles mood={weatherInfo.particles} />}
+      {!disableHeavyFx && (
+        <>
+          <div style={{
+            position: "fixed", top: "-100px", right: "-100px",
+            width: 400, height: 400, borderRadius: "50%",
+            background: `radial-gradient(circle, ${atmosphere.glow}40 0%, transparent 70%)`,
+            filter: "blur(60px)",
+            pointerEvents: "none",
+            animation: "floatGlow 20s ease-in-out infinite",
+            willChange: "transform",
+          }} />
+          <div style={{
+            position: "fixed", bottom: "-100px", left: "-100px",
+            width: 350, height: 350, borderRadius: "50%",
+            background: `radial-gradient(circle, ${T.accent}25 0%, transparent 70%)`,
+            filter: "blur(60px)",
+            pointerEvents: "none",
+            animation: "floatGlow 25s ease-in-out infinite reverse",
+            willChange: "transform",
+          }} />
+        </>
+      )}
+      {disableHeavyFx && (
+        // Versión liviana: un solo radial estático sin blur (sin coste de paint continuo)
+        <div style={{
+          position: "fixed", top: "-80px", right: "-80px",
+          width: 280, height: 280, borderRadius: "50%",
+          background: `radial-gradient(circle, ${atmosphere.glow}33 0%, transparent 65%)`,
+          pointerEvents: "none",
+        }} />
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&display=swap');
