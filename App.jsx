@@ -1,4 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { todayStr, weekKey, monthKey, DAY_OF_WEEK, isNightTime } from "./src/lib/dates.js";
+import { getContextualGreeting, getDayMessage } from "./src/lib/messages.js";
+import { mixColors } from "./src/lib/colors.js";
+import { toRoman } from "./src/lib/roman.js";
+import { DAILY_MANTRAS, getMantraOfDay, getSeasonalMantra } from "./src/lib/mantras.js";
+import { NARRATIVE_SEASONS, SEASON_CYCLE_LENGTH, calcNarrativeSeason } from "./src/lib/season.js";
+import { CYCLE_PHASES, calcCyclePhase } from "./src/lib/cycle.js";
+import { suggestWeight } from "./src/lib/training.js";
+import { detectFertileWindow, detectPatterns } from "./src/lib/cycle-insights.js";
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -40,12 +49,6 @@ const T_NIGHT = {
   warn: "#E8A094",
 };
 
-// Detecta modo noche por hora
-const isNightTime = () => {
-  const h = new Date().getHours();
-  return h >= 20 || h < 6;
-};
-
 // La paleta T se resuelve dinámicamente según hora
 const T = isNightTime() ? T_NIGHT : T_DAY;
 
@@ -84,24 +87,6 @@ const TX_FAST = "180ms cubic-bezier(0.4, 0, 0.2, 1)";
 const TX_SMOOTH = "400ms cubic-bezier(0.4, 0, 0.2, 1)";
 const TX_BOUNCY = "500ms cubic-bezier(0.34, 1.56, 0.64, 1)";
 
-const DAILY_MANTRAS = [
-  "El cuerpo recuerda lo que la mente olvida.",
-  "Constancia. No perfección.",
-  "Tu ritmo es tu ventaja.",
-  "Lo pequeño, repetido, se vuelve grande.",
-  "Escuchar también es entrenar.",
-  "La fuerza se construye despacio.",
-  "Habita tu cuerpo sin prisa.",
-  "Hoy es un buen día para ti.",
-  "Cada repetición te devuelve algo.",
-  "La calma también es disciplina.",
-];
-
-const getMantraOfDay = () => {
-  const day = Math.floor(Date.now() / 86400000);
-  return DAILY_MANTRAS[day % DAILY_MANTRAS.length];
-};
-
 /* ============================================================
    TEMPORADAS NARRATIVAS — Capítulos de la journey en Aura
    ============================================================
@@ -109,121 +94,8 @@ const getMantraOfDay = () => {
    LARGOS basados en días de uso. Ciclo total: 120 días, después
    reinicia (nueva Raíz). La usuaria atraviesa Raíz → Bloom →
    Quietud y vuelve, en espiral, cada vez más profundo.
+   Definiciones movidas a src/lib/season.js y src/lib/mantras.js
 */
-
-const NARRATIVE_SEASONS = {
-  raiz: {
-    id: "raiz",
-    name: "Raíz",
-    subtitle: "Echar base",
-    dayStart: 1,
-    dayEnd: 30,
-    // Color tinte: tierra cálida, grounding
-    tint: "#B8806F",
-    tintSoft: "#D4A59A",
-    glyph: "root",
-    description:
-      "El comienzo. Aprender a escuchar antes de actuar. Los cimientos se hacen en silencio.",
-    // Mantras específicos de esta temporada
-    mantras: [
-      "Lo que se enraíza despacio, se sostiene largo.",
-      "La base primero. Todo lo demás, después.",
-      "Hoy no hace falta florecer. Solo echar raíz.",
-      "La constancia es un gesto secreto.",
-      "Los comienzos se honran con paciencia.",
-      "Estás aprendiendo tu propio ritmo.",
-      "El cuerpo te está conociendo también.",
-    ],
-    // Transición hacia la siguiente
-    nextHint: "Pronto vendrá el florecimiento.",
-  },
-  bloom: {
-    id: "bloom",
-    name: "Bloom",
-    subtitle: "Florecer",
-    dayStart: 31,
-    dayEnd: 75,
-    // Color tinte: rosado cálido, expansión
-    tint: "#C27E6C",
-    tintSoft: "#E8B4A5",
-    glyph: "flower",
-    description:
-      "Lo sembrado se abre. Tu cuerpo responde, la energía se expande. Es momento de habitar el despliegue.",
-    mantras: [
-      "Lo que cultivaste está apareciendo.",
-      "Tu cuerpo ya te reconoce.",
-      "Florecer también es un trabajo.",
-      "Hay plenitud en lo que estás construyendo.",
-      "Tu energía tiene nueva forma.",
-      "Estás en tu propio clímax creativo.",
-      "Hoy sos la versión que sembraste.",
-    ],
-    nextHint: "Después del florecer viene el reposo fértil.",
-  },
-  quietud: {
-    id: "quietud",
-    name: "Quietud",
-    subtitle: "Reposar",
-    dayStart: 76,
-    dayEnd: 120,
-    // Color tinte: violeta suave, introspección
-    tint: "#8A7A8E",
-    tintSoft: "#C9B8C9",
-    glyph: "crescent",
-    description:
-      "El ciclo se recoge. Integrar lo aprendido. El descanso no es pausa: es la forma más alta de cultivo.",
-    mantras: [
-      "La pausa también es sabiduría.",
-      "Reposar es confiar en lo hecho.",
-      "El silencio del campo ya trabaja.",
-      "No todo es avanzar. A veces es sostener.",
-      "Lo aprendido se integra en el descanso.",
-      "Tu quietud tiene textura propia.",
-      "Después de Quietud, una nueva Raíz.",
-    ],
-    nextHint: "Un nuevo ciclo te espera al final de este.",
-  },
-};
-
-const SEASON_CYCLE_LENGTH = 120; // días por ciclo completo
-
-// Calcula la temporada actual según días desde firstUseDate
-function calcNarrativeSeason(firstUseDate) {
-  if (!firstUseDate) return NARRATIVE_SEASONS.raiz;
-  const start = new Date(firstUseDate);
-  const now = new Date();
-  const daysSince = Math.floor((now - start) / 86400000) + 1;
-  const dayInCycle = ((daysSince - 1) % SEASON_CYCLE_LENGTH) + 1;
-  const cycleNumber = Math.floor((daysSince - 1) / SEASON_CYCLE_LENGTH) + 1;
-
-  let season;
-  if (dayInCycle <= 30) season = NARRATIVE_SEASONS.raiz;
-  else if (dayInCycle <= 75) season = NARRATIVE_SEASONS.bloom;
-  else season = NARRATIVE_SEASONS.quietud;
-
-  // Progreso dentro de la temporada actual (0 a 1)
-  const progress = (dayInCycle - season.dayStart) / (season.dayEnd - season.dayStart);
-
-  return {
-    ...season,
-    daysSince,
-    dayInCycle,
-    cycleNumber,          // 1, 2, 3... (cuántas vueltas ha dado)
-    progress: Math.max(0, Math.min(1, progress)),
-    daysIntoSeason: dayInCycle - season.dayStart + 1,
-    daysLeftInSeason: season.dayEnd - dayInCycle,
-    totalSeasonLength: season.dayEnd - season.dayStart + 1,
-  };
-}
-
-// Mantra filtrado por temporada actual
-function getSeasonalMantra(seasonInfo) {
-  if (!seasonInfo || !seasonInfo.mantras) {
-    return getMantraOfDay();
-  }
-  const day = Math.floor(Date.now() / 86400000);
-  return seasonInfo.mantras[day % seasonInfo.mantras.length];
-}
 
 /* ============================================================
    ORNAMENTOS TIPOGRÁFICOS — separadores editoriales
@@ -2064,24 +1936,6 @@ function useNarrativeSeason() {
 }
 
 /* Mezcla dos colores hex. ratio = 0 → color1, ratio = 1 → color2 */
-function mixColors(c1, c2, ratio = 0.5) {
-  const parse = (c) => {
-    if (!c || typeof c !== "string") return [0, 0, 0];
-    const hex = c.replace("#", "");
-    if (hex.length !== 6) return [0, 0, 0];
-    return [
-      parseInt(hex.slice(0, 2), 16),
-      parseInt(hex.slice(2, 4), 16),
-      parseInt(hex.slice(4, 6), 16),
-    ];
-  };
-  const [r1, g1, b1] = parse(c1);
-  const [r2, g2, b2] = parse(c2);
-  const mix = (a, b) => Math.round(a * (1 - ratio) + b * ratio);
-  const toHex = (n) => n.toString(16).padStart(2, "0");
-  return `#${toHex(mix(r1, r2))}${toHex(mix(g1, g2))}${toHex(mix(b1, b2))}`;
-}
-
 /* SeasonBadge — indicador visual compacto de la temporada actual
    Útil para mostrar en headers, menús, o como decoración sutil.
    Variantes: "compact" | "detailed" | "hero" */
@@ -2287,11 +2141,6 @@ function SeasonBadge({
 }
 
 /* Helper: convertir número a romano (I, II, III, IV...) para ciclos */
-function toRoman(num) {
-  const roman = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-  return roman[num] || String(num);
-}
-
 /* ============================================================
    CONTEXTUAL REMINDERS — In-app, sin push
    ============================================================
@@ -2833,26 +2682,6 @@ function useStorage(key, initialValue) {
   return [value, save];
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const weekKey = (d = new Date()) => {
-  const date = new Date(d);
-  const year = date.getFullYear();
-  const firstJan = new Date(year, 0, 1);
-  const days = Math.floor((date - firstJan) / 86400000);
-  const week = Math.ceil((days + firstJan.getDay() + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-};
-const monthKey = (d = new Date()) => {
-  const date = new Date(d);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-};
-
-const DAY_OF_WEEK = () => {
-  const days = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
-  const idx = new Date().getDay();
-  return days[idx === 0 ? 6 : idx - 1];
-};
-
 const WORKOUT_DAYS = {
   lunes: {
     title: "Glúteos + hombros",
@@ -2969,88 +2798,6 @@ const MONTHLY_CHALLENGES = [
     criteria: "Registro diario de los 4 pilares" },
 ];
 
-const CYCLE_PHASES = {
-  menstrual: {
-    name: "Menstrual", days: "1-5", color: "#C27E6C", icon: "◐",
-    energy: "baja",
-    training: "Descanso activo o Pilates muy suave. Si entrenas, volumen bajo, sin peso pesado.",
-    nutrition: "Hierro (carnes rojas, espinaca), magnesio (chocolate 85%, almendras). Evita cafeína extra.",
-    mood: "Necesitas introspección. Permítete bajar el ritmo sin culpa.",
-  },
-  folicular: {
-    name: "Folicular", days: "6-13", color: "#D4A59A", icon: "◑",
-    energy: "media-alta",
-    training: "Sube cargas. Cuerpo responde mejor. Día ideal para PRs en hip thrust o peso muerto.",
-    nutrition: "Proteína alta, carbohidratos complejos. Tu insulina está estable — aprovecha.",
-    mood: "Expansiva, creativa, social. Buen momento para decisiones grandes.",
-  },
-  ovulatoria: {
-    name: "Ovulatoria", days: "14-16", color: "#C9A96E", icon: "○",
-    energy: "máxima",
-    training: "Pico de fuerza. Entrena con todo — este es TU momento de la semana.",
-    nutrition: "Magnesio y zinc. Hidratación extra. Antioxidantes (berries, té verde).",
-    mood: "Magnética, enérgica. Todo fluye con menos esfuerzo.",
-  },
-  lutea: {
-    name: "Lútea", days: "17-28", color: "#B8806F", icon: "◒",
-    energy: "media-baja",
-    training: "Mantén volumen pero baja intensidad. Más repeticiones, menos peso. Más Pilates.",
-    nutrition: "Carbohidratos complejos contra antojos. Triptófano (pavo, plátano) por la tarde.",
-    mood: "Más sensible. Si hay ansiedad nocturna, será más fuerte esta fase.",
-  },
-  unknown: {
-    name: "Observación", days: "?", color: "#9A8A82", icon: "◌",
-    energy: "escucha tu cuerpo",
-    training: "Entrena según cómo te sientas hoy. Registra tus síntomas para aprender tu patrón real.",
-    nutrition: "Alimentación antiinflamatoria. Proteína en cada comida. Hidratación abundante.",
-    mood: "Tu ciclo es único. Observa sin juzgar — tu cuerpo te está hablando.",
-  },
-};
-
-function calcCyclePhase(lastPeriodDate, avgCycleLen = 28, cycleType = "regular") {
-  if (!lastPeriodDate) return null;
-  try {
-    const last = new Date(lastPeriodDate + "T00:00:00");
-    if (isNaN(last.getTime())) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffMs = today - last;
-    const diffDays = Math.floor(diffMs / 86400000) + 1;
-    if (diffDays < 1) return null;
-
-    // Ciclo IRREGULAR: no predecir fase con certeza
-    if (cycleType === "irregular") {
-      // Solo sabemos con certeza: fase menstrual (sangrado activo) o "post-período"
-      if (diffDays <= 5) {
-        return {
-          phase: "menstrual",
-          dayOfCycle: diffDays,
-          data: CYCLE_PHASES.menstrual,
-          uncertain: false,
-        };
-      }
-      // Después del sangrado, no asumimos fase — decimos "no determinada"
-      return {
-        phase: "unknown",
-        dayOfCycle: diffDays,
-        data: CYCLE_PHASES.unknown,
-        uncertain: true,
-      };
-    }
-
-    // Ciclo REGULAR: cálculo por días
-    const dayOfCycle = ((diffDays - 1) % avgCycleLen) + 1;
-    let phase;
-    if (dayOfCycle <= 5) phase = "menstrual";
-    else if (dayOfCycle <= 13) phase = "folicular";
-    else if (dayOfCycle <= 16) phase = "ovulatoria";
-    else phase = "lutea";
-    return { phase, dayOfCycle, data: CYCLE_PHASES[phase], uncertain: false };
-  } catch (e) {
-    return null;
-  }
-}
-
 const PILATES_ROUTINES = {
   core: {
     title: "Core + estabilidad", duration: 30, focus: "Transverso abdominal · Lumbar · Pelvis", icon: "🌿",
@@ -3127,57 +2874,6 @@ function useClaudeCoach() {
     }
   };
   return { ask, loading };
-}
-
-function suggestWeight(exercise, history, energy, cyclePhase = null) {
-  const base = exercise.baseWeight;
-  if (!history || history.length === 0) {
-    return { suggested: base, source: "base", message: "Sugerencia inicial. Ajusta según sientas." };
-  }
-  const last = history[history.length - 1];
-  const lastAvgWeight = last.sets.reduce((s, x) => s + (x.weight || 0), 0) / (last.sets.length || 1);
-
-  let multiplier = 1;
-  let rationale = "";
-  if (energy === "alta") {
-    const avgRir = last.sets.reduce((s, x) => s + (parseInt(x.rir) || 0), 0) / last.sets.length;
-    if (avgRir >= 2) { multiplier = 1.05; rationale = "Tu cuerpo está listo. Subimos 5%."; }
-    else { multiplier = 1.02; rationale = "Alta energía, último RIR apretado. Subimos poco."; }
-  } else if (energy === "media") {
-    multiplier = 1; rationale = "Mantén el peso. Consolida técnica.";
-  } else {
-    multiplier = 0.88; rationale = "Baja energía. Bajamos 12%.";
-  }
-
-  let cycleNote = "";
-  if (cyclePhase === "ovulatoria") { multiplier *= 1.03; cycleNote = " Fase ovulatoria — pico."; }
-  else if (cyclePhase === "folicular") { cycleNote = " Folicular — receptiva."; }
-  else if (cyclePhase === "lutea") { multiplier *= 0.95; cycleNote = " Lútea — bajamos ligero."; }
-  else if (cyclePhase === "menstrual") { multiplier *= 0.85; cycleNote = " Menstrual — escucha tu cuerpo."; }
-
-  const suggested = Math.round(lastAvgWeight * multiplier * 2) / 2;
-  return { suggested, source: "aprendido", message: rationale + cycleNote };
-}
-
-function getContextualGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Buenos días";
-  if (hour < 19) return "Buenas tardes";
-  return "Buenas noches";
-}
-
-function getDayMessage() {
-  const day = DAY_OF_WEEK();
-  const messages = {
-    lunes: "Hoy tocan glúteos y hombros. Empieza con intención.",
-    martes: "Pilates o descanso activo. Tu cuerpo lo agradece.",
-    miercoles: "Hoy es miércoles de espalda. Tu cuello te lo agradecerá.",
-    jueves: "Pilates o descanso. Día perfecto para cuello.",
-    viernes: "Pierna y glúteo. Termina fuerte.",
-    sabado: "Día libre o Pilates suave. Recupera.",
-    domingo: "Descanso. Prepárate para la semana.",
-  };
-  return messages[day];
 }
 
 // ---------- UI BASE ----------
@@ -4294,124 +3990,6 @@ function ExerciseCard({ ex, coach, historial, energy, onSave, cyclePhase, exerci
       </Card>
     </>
   );
-}
-
-// Detecta ventana fértil y ovulación por síntomas (para ciclos irregulares)
-function detectFertileWindow(symptoms, lastPeriod) {
-  if (!symptoms || typeof symptoms !== "object") return null;
-  const entries = Object.entries(symptoms)
-    .filter(([date, data]) => {
-      if (!lastPeriod) return true;
-      return date >= lastPeriod;
-    })
-    .sort(([a], [b]) => a.localeCompare(b));
-
-  if (entries.length < 2) return null;
-
-  // Buscar días con moco elástico (signo más fuerte de ovulación)
-  const eggWhiteDays = entries.filter(([_, d]) => d.mucus === "eggwhite").map(([date]) => date);
-  // Buscar días con dolor ovárico (mittelschmerz)
-  const ovaryPainDays = entries.filter(([_, d]) =>
-    (d.symptoms || []).includes("cm_ovul")
-  ).map(([date]) => date);
-  // Buscar días con libido alta
-  const libidoDays = entries.filter(([_, d]) =>
-    (d.symptoms || []).includes("libido")
-  ).map(([date]) => date);
-
-  if (eggWhiteDays.length === 0 && ovaryPainDays.length === 0) return null;
-
-  // Confianza alta si tienes 2+ días de moco elástico seguidos
-  let confidence = "baja";
-  let signal = null;
-
-  if (eggWhiteDays.length >= 2) {
-    confidence = "alta";
-    signal = "Moco cervical elástico detectado";
-  } else if (eggWhiteDays.length >= 1 && ovaryPainDays.length >= 1) {
-    confidence = "alta";
-    signal = "Moco elástico + dolor ovárico";
-  } else if (eggWhiteDays.length >= 1) {
-    confidence = "media";
-    signal = "Moco cervical elástico";
-  } else if (ovaryPainDays.length >= 1) {
-    confidence = "media";
-    signal = "Dolor ovárico detectado";
-  }
-
-  const lastEggWhite = eggWhiteDays[eggWhiteDays.length - 1];
-  const firstEggWhite = eggWhiteDays[0];
-
-  return {
-    confidence,
-    signal,
-    fertileStart: firstEggWhite || ovaryPainDays[0],
-    fertileEnd: lastEggWhite || ovaryPainDays[ovaryPainDays.length - 1],
-    hasLibido: libidoDays.length > 0,
-  };
-}
-
-// Detecta patrones y da insights simples
-function detectPatterns(symptoms, cycleHistory) {
-  if (!symptoms || typeof symptoms !== "object") return [];
-  const insights = [];
-
-  const allDays = Object.entries(symptoms);
-  if (allDays.length < 7) return [];
-
-  // Patrón 1: ¿Cuántos días con cólicos en los últimos 30 días?
-  const last30Days = new Date();
-  last30Days.setDate(last30Days.getDate() - 30);
-  const last30DaysStr = last30Days.toISOString().slice(0, 10);
-
-  const recentDays = allDays.filter(([date]) => date >= last30DaysStr);
-  const crampsDays = recentDays.filter(([_, d]) => (d.symptoms || []).includes("cramps")).length;
-  const lowEnergyDays = recentDays.filter(([_, d]) => (d.symptoms || []).includes("low_energy")).length;
-  const moodDays = recentDays.filter(([_, d]) => (d.symptoms || []).includes("mood")).length;
-
-  if (crampsDays >= 5) {
-    insights.push({
-      type: "warning",
-      text: `Has tenido cólicos ${crampsDays} días este último mes. Si es constante, vale la pena mencionarlo a tu ginecóloga.`,
-    });
-  }
-
-  if (lowEnergyDays >= 10) {
-    insights.push({
-      type: "info",
-      text: `${lowEnergyDays} días de cansancio en el mes. Revisa sueño, hierro y tiroides con tu médica.`,
-    });
-  }
-
-  if (moodDays >= 7) {
-    insights.push({
-      type: "info",
-      text: `Irritabilidad frecuente (${moodDays} días). Podría ser hormonal, estrés o SPM — observa si coincide con fases.`,
-    });
-  }
-
-  // Patrón 2: Variación de ciclo
-  if (Array.isArray(cycleHistory) && cycleHistory.length >= 3) {
-    const sorted = [...cycleHistory].sort();
-    const diffs = [];
-    for (let i = 1; i < sorted.length; i++) {
-      const d1 = new Date(sorted[i - 1] + "T00:00:00");
-      const d2 = new Date(sorted[i] + "T00:00:00");
-      const diff = Math.floor((d2 - d1) / 86400000);
-      if (diff > 10 && diff < 90) diffs.push(diff);
-    }
-    if (diffs.length >= 2) {
-      const variation = Math.max(...diffs) - Math.min(...diffs);
-      if (variation > 20) {
-        insights.push({
-          type: "warning",
-          text: `Tu ciclo varía ${variation} días entre el más corto y el más largo. Es una variación alta — vale la pena evaluar con profesional.`,
-        });
-      }
-    }
-  }
-
-  return insights;
 }
 
 // ==================== WEATHER ====================
