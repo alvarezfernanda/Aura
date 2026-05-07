@@ -9,6 +9,7 @@ import { CYCLE_PHASES, calcCyclePhase } from "./src/lib/cycle.js";
 import { suggestWeight } from "./src/lib/training.js";
 import { detectFertileWindow, detectPatterns } from "./src/lib/cycle-insights.js";
 import { useStorage } from "./src/hooks/useStorage.js";
+import { useAchievements } from "./src/hooks/useAchievements.js";
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS } from "./src/lib/achievements.js";
 
 /* ============================================================
@@ -515,112 +516,6 @@ function AchievementGlyph({ name, size = 48, color, locked = false }) {
 }
 
 /* ─── Hook: detecta logros desbloqueados ─── */
-function useAchievements({ streak, sesionesGym, sesionesPilates, sesionesCuello, bodyMetrics, painLog, cycleHistory, lastPeriod, cycleType }) {
-  const [unlocked, setUnlocked] = useStorage("aura-achievements-v1", {});
-  const [revealQueue, setRevealQueue] = useState([]);
-
-  // Construir contexto para los checks
-  const ctx = useMemo(() => {
-    const totalSessions =
-      (Array.isArray(sesionesGym) ? sesionesGym.length : 0) +
-      (Array.isArray(sesionesPilates) ? sesionesPilates.length : 0) +
-      (Array.isArray(sesionesCuello) ? sesionesCuello.length : 0);
-
-    const safeBody = bodyMetrics && typeof bodyMetrics === "object" ? bodyMetrics : {};
-    const hasJournaled = Array.isArray(safeBody.journal) && safeBody.journal.length > 0;
-
-    const painLogCount = Array.isArray(painLog) ? painLog.length : 0;
-
-    const phasesObserved = Array.isArray(cycleHistory)
-      ? new Set(cycleHistory.map((e) => e.phase).filter(Boolean)).size
-      : 0;
-
-    const periodsLogged = Array.isArray(cycleHistory)
-      ? cycleHistory.filter((e) => e.type === "period" || e.isPeriod).length
-      : (lastPeriod ? 1 : 0);
-
-    // ¿Entrenó en ovulación alguna vez?
-    let trainedInOvulation = false;
-    let restedInLuteal = false;
-    if (lastPeriod && Array.isArray(sesionesGym) && typeof calcCyclePhase === "function") {
-      try {
-        for (const s of sesionesGym) {
-          const sd = typeof s === "string" ? s : s.date;
-          if (!sd) continue;
-          const info = calcCyclePhase(lastPeriod, 28, cycleType || "regular", sd);
-          if (info?.data?.name?.toLowerCase?.().includes("ovul")) {
-            trainedInOvulation = true;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-    // Rested in luteal: si en los últimos 14 días hubo al menos un día de fase lútea sin sesión
-    if (lastPeriod) {
-      try {
-        const today = new Date();
-        for (let i = 0; i < 14; i++) {
-          const d = new Date(today);
-          d.setDate(today.getDate() - i);
-          const ds = d.toISOString().slice(0, 10);
-          const info = calcCyclePhase(lastPeriod, 28, cycleType || "regular", ds);
-          if (info?.data?.name?.toLowerCase?.().includes("lút") || info?.data?.name?.toLowerCase?.().includes("lute")) {
-            const trainedThisDay =
-              (Array.isArray(sesionesGym) && sesionesGym.some((s) => (typeof s === "string" ? s : s.date) === ds)) ||
-              (Array.isArray(sesionesPilates) && sesionesPilates.some((s) => (typeof s === "string" ? s : s.date) === ds));
-            if (!trainedThisDay) { restedInLuteal = true; break; }
-          }
-        }
-      } catch (e) {}
-    }
-
-    return {
-      streak: streak || 0,
-      totalSessions,
-      hasJournaled,
-      painLogCount,
-      phasesObserved,
-      periodsLogged,
-      trainedInOvulation,
-      restedInLuteal,
-    };
-  }, [streak, sesionesGym, sesionesPilates, sesionesCuello, bodyMetrics, painLog, cycleHistory, lastPeriod, cycleType]);
-
-  // Revisar logros cuando cambia el contexto
-  useEffect(() => {
-    const currentUnlocked = unlocked || {};
-    const newly = [];
-    for (const ach of ACHIEVEMENTS) {
-      if (!currentUnlocked[ach.id] && ach.check(ctx)) {
-        newly.push(ach);
-      }
-    }
-    if (newly.length > 0) {
-      const updated = { ...currentUnlocked };
-      newly.forEach((ach) => { updated[ach.id] = { unlockedAt: new Date().toISOString() }; });
-      setUnlocked(updated);
-      setRevealQueue((q) => [...q, ...newly]);
-      // Haptic feedback si está disponible
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        try { navigator.vibrate([40, 80, 40]); } catch (e) {}
-      }
-    }
-  }, [ctx]);
-
-  const dismissCurrentReveal = useCallback(() => {
-    setRevealQueue((q) => q.slice(1));
-  }, []);
-
-  return {
-    unlocked: unlocked || {},
-    currentReveal: revealQueue[0] || null,
-    revealCount: revealQueue.length,
-    dismissCurrentReveal,
-    allAchievements: ACHIEVEMENTS,
-    ctx, // expuesto por si querés mostrar progreso
-  };
-}
-
 /* ─── Reveal fullscreen narrativo ─── */
 function AchievementReveal({ achievement, onDismiss }) {
   const [visible, setVisible] = useState(false);
