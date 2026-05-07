@@ -191,12 +191,11 @@ describe("useAchievements — desbloqueo y cola de reveals", () => {
     expect(result.current.currentReveal).toBeNull();
   });
 
-  // Known issue: useStorage hidrata via useEffect (async), pero el
-  // useEffect del check del logro corre con el valor inicial {} antes de
-  // que llegue la hidratación. Resultado: cada mount con un logro ya
-  // desbloqueado en localStorage RE-ENCOLA la celebración. Vale la pena
-  // arreglarlo (esperar hidratación o usar lazy init de useState).
-  it.skip("TODO: logros ya desbloqueados no deberían re-encolarse tras hidratar", async () => {
+  it("logros ya desbloqueados no se re-encolan tras hidratar", async () => {
+    // Antes del fix de useStorage, el primer render usaba {} y el efecto
+    // del check encolaba primera_llama de nuevo. Ahora la hidratación de
+    // localStorage es síncrona (lazy init) y el check arranca con el
+    // estado real.
     window.localStorage.setItem(
       "aura-achievements-v1",
       JSON.stringify({ primera_llama: { unlockedAt: "2025-01-01" } })
@@ -204,23 +203,11 @@ describe("useAchievements — desbloqueo y cola de reveals", () => {
     const { result } = renderHook(() =>
       useAchievements({ ...baseProps, streak: 3 })
     );
-    await waitFor(() =>
-      expect(result.current.unlocked.primera_llama).toBeDefined()
-    );
+    expect(result.current.unlocked.primera_llama).toBeDefined();
+    // Pequeña ventana para que cualquier efecto pendiente corra
+    await new Promise((r) => setTimeout(r, 0));
     expect(result.current.revealCount).toBe(0);
     expect(result.current.currentReveal).toBeNull();
-  });
-
-  it("regresión documentada: race entre hidratación y check re-encola la celebración", async () => {
-    window.localStorage.setItem(
-      "aura-achievements-v1",
-      JSON.stringify({ primera_llama: { unlockedAt: "2025-01-01" } })
-    );
-    const { result } = renderHook(() =>
-      useAchievements({ ...baseProps, streak: 3 })
-    );
-    await waitFor(() => expect(result.current.revealCount).toBe(1));
-    // Cuando se arregle el race, este test debería invertirse al de arriba.
   });
 
   it("subir streak 3→7 después del primer dismiss encola sólo el nuevo", async () => {

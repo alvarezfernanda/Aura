@@ -20,6 +20,13 @@ describe("useStorage — backend localStorage", () => {
     await waitFor(() => expect(result.current[0]).toEqual({ stored: true }));
   });
 
+  it("hidrata SÍNCRONAMENTE en el primer render (sin useEffect)", () => {
+    // Crítico para evitar race con consumidores como useAchievements.
+    window.localStorage.setItem("aura-sync", JSON.stringify("sync-val"));
+    const { result } = renderHook(() => useStorage("aura-sync", "default"));
+    expect(result.current[0]).toBe("sync-val");
+  });
+
   it("save() persiste en localStorage", async () => {
     const { result } = renderHook(() => useStorage("aura-test", []));
     await act(async () => {
