@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspens
 // Lazy: la página de Notas (voz + tags + análisis) se carga sólo al entrar.
 // Reduce el bundle inicial y acelera el primer paint en Android.
 const VoiceNotesPage = lazy(() => import("./voiceNotes.jsx"));
+const NotesSearchPage = lazy(() => import("./notesSearch.jsx"));
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -8386,6 +8387,21 @@ export default function Aura() {
 
   const streak = calcStreak();
 
+  // Mapa exId → { name, day } para que la búsqueda etiquete cada sesión.
+  const workoutMap = useMemo(() => {
+    const m = {};
+    if (typeof WORKOUT_DAYS === "object" && WORKOUT_DAYS) {
+      for (const dayKey of Object.keys(WORKOUT_DAYS)) {
+        const day = WORKOUT_DAYS[dayKey];
+        const exs = (day && day.exercises) || [];
+        for (const ex of exs) {
+          if (ex && ex.id) m[ex.id] = { name: ex.name || ex.id, day: dayKey };
+        }
+      }
+    }
+    return m;
+  }, []);
+
   const [showSplash, setShowSplash] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -8446,6 +8462,26 @@ export default function Aura() {
           lastPeriod={lastPeriod}
           cycleType={cycleType}
           onBack={() => setPage("home")}
+          onOpenSearch={() => setPage("search")}
+        />
+      </Suspense>
+    ),
+    search: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando búsqueda…</div>
+      }>
+        <NotesSearchPage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          workoutMap={workoutMap}
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          onBack={() => setPage("notes")}
         />
       </Suspense>
     ),

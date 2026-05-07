@@ -203,7 +203,7 @@ function MicButton({ listening, disabled, onPress, reduced }) {
      - lastPeriod, cycleType   (para vincular fase del ciclo)
      - onBack (opcional)       (para volver al menú anterior)
 ------------------------------------------------------------------ */
-export default function VoiceNotesPage({ lastPeriod, cycleType, onBack }) {
+export default function VoiceNotesPage({ lastPeriod, cycleType, onBack, onOpenSearch }) {
   const reduced = useReducedMotion();
   const speech = useSpeechRecognition({ lang: "es-ES" });
   const { notes, addNote, updateNote, removeNote } = useVoiceNotes();
@@ -287,10 +287,34 @@ export default function VoiceNotesPage({ lastPeriod, cycleType, onBack }) {
         </button>
       )}
 
-      <h1 style={{
-        fontFamily: FONT_SERIF, fontWeight: 500, fontSize: 32,
-        margin: "8px 0 4px", letterSpacing: 0.2,
-      }}>Notas por voz</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, margin: "8px 0 4px" }}>
+        <h1 style={{
+          fontFamily: FONT_SERIF, fontWeight: 500, fontSize: 32,
+          margin: 0, letterSpacing: 0.2,
+        }}>Notas por voz</h1>
+        {onOpenSearch && (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            aria-label="Buscar notas y sesiones"
+            style={{
+              flexShrink: 0,
+              width: 40, height: 40,
+              border: `1px solid ${T.line}`,
+              borderRadius: 12,
+              background: T.cardGlass,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+              color: T.accentDeep,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M 21 21 L 16 16" />
+            </svg>
+          </button>
+        )}
+      </div>
       <p style={{ color: T.inkSoft, fontSize: 14, margin: "0 0 20px" }}>
         Habla y se transcribe en tu dispositivo. Se guarda con tu fase del ciclo.
       </p>
