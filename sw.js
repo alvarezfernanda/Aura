@@ -1,44 +1,116 @@
-// Aura Service Worker — cache básico + offline fallback
-const CACHE = 'aura-v1';
-const CORE = ['/', '/index.html', '/manifest.json'];
+/* Aura Service Worker — versión optimizada para Android
+ * - Precaches the app shell
+ * - Stale-while-revalidate para fonts e imágenes
+ * - Cache-first inmutable para assets hasheados de Vite
+ * - Network-first con fallback al shell para navegaciones
+ */
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)));
-  self.skipWaiting();
-});
+const SW_VERSION = 'aura-v3';
+const SHELL_CACHE = `${SW_VERSION}-shell`;
+const ASSET_CACHE = `${SW_VERSION}-assets`;
+const FONT_CACHE = `${SW_VERSION}-fonts`;
+const IMG_CACHE = `${SW_VERSION}-img`;
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+const SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', (e) => {
-  const { request } = e;
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((k) => !k.startsWith(SW_VERSION)).map((k) => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+const isHashedAsset = (url) =>
+  /\/assets\/.+\.[a-f0-9]{6,}\.(?:js|css|woff2?|svg|png|jpg|webp)$/.test(url.pathname);
+
+const isFont = (url) => /fonts\.(?:googleapis|gstatic)\.com/.test(url.host);
+
+const isImage = (url) => /\.(?:png|jpg|jpeg|webp|gif|svg)$/i.test(url.pathname);
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  const networkPromise = fetch(request)
+    .then((res) => {
+      if (res && res.status === 200) cache.put(request, res.clone()).catch(() => {});
+      return res;
+    })
+    .catch(() => null);
+  return cached || (await networkPromise) || cached;
+}
+
+async function networkFirstNavigation(request) {
+  try {
+    const res = await fetch(request);
+    if (res && res.status === 200) {
+      const copy = res.clone();
+      caches.open(SHELL_CACHE).then((c) => c.put('/index.html', copy)).catch(() => {});
+    }
+    return res;
+  } catch {
+    const cache = await caches.open(SHELL_CACHE);
+    return (await cache.match(request)) || (await cache.match('/index.html')) || Response.error();
+  }
+}
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
   if (request.method !== 'GET') return;
 
-  // Network first para HTML (para ver cambios rápido)
+  const url = new URL(request.url);
+
+  // No interceptamos llamadas al backend (Claude, etc.)
+  if (url.pathname.startsWith('/api/')) return;
+
   if (request.mode === 'navigate') {
-    e.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+    event.respondWith(networkFirstNavigation(request));
+    return;
+  }
+
+  if (isFont(url)) {
+    event.respondWith(staleWhileRevalidate(request, FONT_CACHE));
+    return;
+  }
+
+  if (isHashedAsset(url)) {
+    event.respondWith(
+      caches.open(ASSET_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        const res = await fetch(request);
+        if (res && res.status === 200) cache.put(request, res.clone()).catch(() => {});
+        return res;
+      })
     );
     return;
   }
 
-  // Cache first para assets
-  e.respondWith(
-    caches.match(request).then((cached) => {
-      return cached || fetch(request).then((res) => {
-        // Cachear assets estáticos
-        if (res.ok && (request.url.includes('/assets/') || request.url.endsWith('.svg') || request.url.endsWith('.png'))) {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-    })
-  );
+  if (isImage(url)) {
+    event.respondWith(staleWhileRevalidate(request, IMG_CACHE));
+    return;
+  }
+
+  if (url.origin === self.location.origin) {
+    event.respondWith(staleWhileRevalidate(request, ASSET_CACHE));
+  }
 });

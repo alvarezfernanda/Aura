@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+
+// Lazy: la página de Notas (voz + tags + análisis) se carga sólo al entrar.
+// Reduce el bundle inicial y acelera el primer paint en Android.
+const VoiceNotesPage = lazy(() => import("./voiceNotes.jsx"));
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -8156,6 +8160,14 @@ const NavIcon = ({ type, active, size = 20 }) => {
         fill={active ? T.gold : "none"} fillOpacity={active ? 0.3 : 0} />
     </svg>
   );
+  if (type === "notes") return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <rect {...props} x="6" y="3" width="12" height="18" rx="2" />
+      <path {...props} d="M 9 8 L 15 8" />
+      <path {...props} d="M 9 12 L 15 12" />
+      <path {...props} d="M 9 16 L 13 16" />
+    </svg>
+  );
   return null;
 };
 
@@ -8423,6 +8435,20 @@ export default function Aura() {
                cycleHistory={cycleHistory}
                lastPeriod={lastPeriod}
                cycleType={cycleType} />,
+    notes: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando notas…</div>
+      }>
+        <VoiceNotesPage
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          onBack={() => setPage("home")}
+        />
+      </Suspense>
+    ),
   };
 
   const nav = [
@@ -8430,6 +8456,7 @@ export default function Aura() {
     { id: "gym", label: "Gym" },
     { id: "cycle", label: "Ciclo" },
     { id: "body", label: "Cuerpo" },
+    { id: "notes", label: "Notas" },
     { id: "challenges", label: "Retos" },
   ];
 
