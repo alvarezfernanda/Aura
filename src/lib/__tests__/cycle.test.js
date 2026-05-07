@@ -81,6 +81,52 @@ describe("calcCyclePhase — ciclo regular (28 días)", () => {
   });
 });
 
+describe("calcCyclePhase — referenceDate (4º arg)", () => {
+  // Sin tocar el reloj: con referenceDate explícita la función no debería
+  // depender del Date actual.
+  const lastPeriod = "2026-01-01";
+
+  it("día 1 cuando referenceDate = lastPeriod", () => {
+    const r = calcCyclePhase(lastPeriod, 28, "regular", "2026-01-01");
+    expect(r.phase).toBe("menstrual");
+    expect(r.dayOfCycle).toBe(1);
+  });
+
+  it("día 14 (ovulatoria) cuando referenceDate = lastPeriod + 13 días", () => {
+    const r = calcCyclePhase(lastPeriod, 28, "regular", "2026-01-14");
+    expect(r.phase).toBe("ovulatoria");
+    expect(r.dayOfCycle).toBe(14);
+  });
+
+  it("día 20 (lútea) cuando referenceDate = lastPeriod + 19 días", () => {
+    const r = calcCyclePhase(lastPeriod, 28, "regular", "2026-01-20");
+    expect(r.phase).toBe("lutea");
+    expect(r.dayOfCycle).toBe(20);
+  });
+
+  it("regresión: el 4º arg ya no se ignora silenciosamente", () => {
+    // Antes del fix: pasar una fecha en ovulación se ignoraba y dependía del reloj.
+    // Hoy es día 14 desde lastPeriod = ovulatoria con certeza.
+    const ovulationDate = "2026-01-14";
+    const r = calcCyclePhase(lastPeriod, 28, "regular", ovulationDate);
+    expect(r.phase).toBe("ovulatoria");
+  });
+
+  it("referenceDate inválido retorna null", () => {
+    expect(calcCyclePhase(lastPeriod, 28, "regular", "no-es-fecha")).toBeNull();
+  });
+
+  it("referenceDate anterior al lastPeriod retorna null", () => {
+    expect(calcCyclePhase(lastPeriod, 28, "regular", "2025-12-25")).toBeNull();
+  });
+
+  it("respeta cycleType=irregular con referenceDate", () => {
+    const r = calcCyclePhase(lastPeriod, 28, "irregular", "2026-01-15");
+    expect(r.phase).toBe("unknown");
+    expect(r.uncertain).toBe(true);
+  });
+});
+
 describe("calcCyclePhase — ciclo irregular", () => {
   beforeEach(() => {
     vi.useFakeTimers();

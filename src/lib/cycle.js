@@ -36,14 +36,20 @@ export const CYCLE_PHASES = {
   },
 };
 
-export function calcCyclePhase(lastPeriodDate, avgCycleLen = 28, cycleType = "regular") {
+// referenceDate: fecha desde la que se mide el día del ciclo. Default: hoy.
+// Permite preguntar "qué fase era yo en la fecha X?" — usado por
+// useAchievements para comprobar trainedInOvulation / restedInLuteal por sesión.
+export function calcCyclePhase(lastPeriodDate, avgCycleLen = 28, cycleType = "regular", referenceDate = null) {
   if (!lastPeriodDate) return null;
   try {
     const last = new Date(lastPeriodDate + "T00:00:00");
     if (isNaN(last.getTime())) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffMs = today - last;
+    const ref = referenceDate
+      ? new Date(referenceDate + "T00:00:00")
+      : new Date();
+    if (isNaN(ref.getTime())) return null;
+    ref.setHours(0, 0, 0, 0);
+    const diffMs = ref - last;
     const diffDays = Math.floor(diffMs / 86400000) + 1;
     if (diffDays < 1) return null;
 
