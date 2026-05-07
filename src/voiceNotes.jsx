@@ -203,7 +203,7 @@ function MicButton({ listening, disabled, onPress, reduced }) {
      - lastPeriod, cycleType   (para vincular fase del ciclo)
      - onBack (opcional)       (para volver al menú anterior)
 ------------------------------------------------------------------ */
-export default function VoiceNotesPage({ lastPeriod, cycleType, onBack, onOpenSearch, onOpenTimeline }) {
+export default function VoiceNotesPage({ lastPeriod, cycleType, onBack, onOpenSearch, onOpenTimeline, onOpenSummary }) {
   const reduced = useReducedMotion();
   const speech = useSpeechRecognition({ lang: "es-ES" });
   const { notes, addNote, updateNote, removeNote } = useVoiceNotes();
@@ -292,23 +292,23 @@ export default function VoiceNotesPage({ lastPeriod, cycleType, onBack, onOpenSe
           fontFamily: FONT_SERIF, fontWeight: 500, fontSize: 32,
           margin: 0, letterSpacing: 0.2,
         }}>Notas por voz</h1>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {onOpenTimeline && (
             <button
               type="button"
               onClick={onOpenTimeline}
               aria-label="Ver línea de tiempo del ciclo"
               style={{
-                width: 40, height: 40,
+                width: 36, height: 36,
                 border: `1px solid ${T.line}`,
-                borderRadius: 12,
+                borderRadius: 10,
                 background: T.cardGlass,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer",
                 color: T.plum,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="6" cy="6" r="2" />
                 <circle cx="6" cy="18" r="2" />
                 <path d="M 6 8 L 6 16" />
@@ -318,22 +318,45 @@ export default function VoiceNotesPage({ lastPeriod, cycleType, onBack, onOpenSe
               </svg>
             </button>
           )}
+          {onOpenSummary && (
+            <button
+              type="button"
+              onClick={onOpenSummary}
+              aria-label="Ver resumen semanal/mensual"
+              style={{
+                width: 36, height: 36,
+                border: `1px solid ${T.line}`,
+                borderRadius: 10,
+                background: T.cardGlass,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+                color: T.gold,
+              }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M 4 20 L 4 10" />
+                <path d="M 10 20 L 10 4" />
+                <path d="M 16 20 L 16 14" />
+                <path d="M 22 20 L 22 8" />
+              </svg>
+            </button>
+          )}
           {onOpenSearch && (
             <button
               type="button"
               onClick={onOpenSearch}
               aria-label="Buscar notas y sesiones"
               style={{
-                width: 40, height: 40,
+                width: 36, height: 36,
                 border: `1px solid ${T.line}`,
-                borderRadius: 12,
+                borderRadius: 10,
                 background: T.cardGlass,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer",
                 color: T.accentDeep,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M 21 21 L 16 16" />
               </svg>

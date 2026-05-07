@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspens
 const VoiceNotesPage = lazy(() => import("./voiceNotes.jsx"));
 const NotesSearchPage = lazy(() => import("./notesSearch.jsx"));
 const CycleTimelinePage = lazy(() => import("./timeline.jsx"));
+const SummaryPage = lazy(() => import("./summary.jsx"));
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -8465,6 +8466,7 @@ export default function Aura() {
           onBack={() => setPage("home")}
           onOpenSearch={() => setPage("search")}
           onOpenTimeline={() => setPage("timeline")}
+          onOpenSummary={() => setPage("summary")}
         />
       </Suspense>
     ),
@@ -8504,6 +8506,25 @@ export default function Aura() {
           lastPeriod={lastPeriod}
           cycleType={cycleType}
           workoutMap={workoutMap}
+          onBack={() => setPage("notes")}
+        />
+      </Suspense>
+    ),
+    summary: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando resumen…</div>
+      }>
+        <SummaryPage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          painLog={painLog}
+          cycleHistory={cycleHistory}
+          cycleType={cycleType}
           onBack={() => setPage("notes")}
         />
       </Suspense>
