@@ -7,6 +7,8 @@ const NotesSearchPage = lazy(() => import("./notesSearch.jsx"));
 const CycleTimelinePage = lazy(() => import("./timeline.jsx"));
 const SummaryPage = lazy(() => import("./summary.jsx"));
 
+import { useReducedMotion, isLowEndDevice, useIsMobile } from "./perf.jsx";
+
 /* ============================================================
    AURA — Bienestar con contexto total
    ============================================================ */
@@ -8463,10 +8465,10 @@ export default function Aura() {
         <VoiceNotesPage
           lastPeriod={lastPeriod}
           cycleType={cycleType}
-          onBack={() => setPage("home")}
-          onOpenSearch={() => setPage("search")}
-          onOpenTimeline={() => setPage("timeline")}
-          onOpenSummary={() => setPage("summary")}
+          onBack={goHome}
+          onOpenSearch={goSearch}
+          onOpenTimeline={goTimeline}
+          onOpenSummary={goSummary}
         />
       </Suspense>
     ),
@@ -8485,7 +8487,7 @@ export default function Aura() {
           workoutMap={workoutMap}
           lastPeriod={lastPeriod}
           cycleType={cycleType}
-          onBack={() => setPage("notes")}
+          onBack={goNotes}
         />
       </Suspense>
     ),
@@ -8506,7 +8508,7 @@ export default function Aura() {
           lastPeriod={lastPeriod}
           cycleType={cycleType}
           workoutMap={workoutMap}
-          onBack={() => setPage("notes")}
+          onBack={goNotes}
         />
       </Suspense>
     ),
@@ -8525,7 +8527,7 @@ export default function Aura() {
           painLog={painLog}
           cycleHistory={cycleHistory}
           cycleType={cycleType}
-          onBack={() => setPage("notes")}
+          onBack={goNotes}
         />
       </Suspense>
     ),
@@ -8544,6 +8546,24 @@ export default function Aura() {
   const appWeather = useWeather();
   const weatherInfo = appWeather ? decodeWeather(appWeather.code) : null;
 
+  // Gating de FX pesados: respeta prefers-reduced-motion y desactiva
+  // los blurs y partículas en móvil/low-end (filter:blur+radial son
+  // muy costosos en Android — pueden bajar el FPS de 60 a 20).
+  const reduceMotion = useReducedMotion();
+  const isMobile = useIsMobile(640);
+  const disableHeavyFx = useMemo(
+    () => reduceMotion || isMobile || isLowEndDevice(),
+    [reduceMotion, isMobile]
+  );
+
+  // Handlers de navegación memoizados para que botones inferiores no
+  // re-rendericen sin necesidad.
+  const goHome = useCallback(() => setPage("home"), []);
+  const goNotes = useCallback(() => setPage("notes"), []);
+  const goSearch = useCallback(() => setPage("search"), []);
+  const goTimeline = useCallback(() => setPage("timeline"), []);
+  const goSummary = useCallback(() => setPage("summary"), []);
+
   return (
     <div style={{
       minHeight: "100vh", background: atmosphere.gradient,
@@ -8551,23 +8571,38 @@ export default function Aura() {
       position: "relative",
       transition: "background 2s ease-in-out",
     }}>
-      {weatherInfo && <WeatherParticles mood={weatherInfo.particles} />}
-      <div style={{
-        position: "fixed", top: "-100px", right: "-100px",
-        width: 400, height: 400, borderRadius: "50%",
-        background: `radial-gradient(circle, ${atmosphere.glow}40 0%, transparent 70%)`,
-        filter: "blur(60px)",
-        pointerEvents: "none",
-        animation: "floatGlow 20s ease-in-out infinite",
-      }} />
-      <div style={{
-        position: "fixed", bottom: "-100px", left: "-100px",
-        width: 350, height: 350, borderRadius: "50%",
-        background: `radial-gradient(circle, ${T.accent}25 0%, transparent 70%)`,
-        filter: "blur(60px)",
-        pointerEvents: "none",
-        animation: "floatGlow 25s ease-in-out infinite reverse",
-      }} />
+      {weatherInfo && !disableHeavyFx && <WeatherParticles mood={weatherInfo.particles} />}
+      {!disableHeavyFx && (
+        <>
+          <div style={{
+            position: "fixed", top: "-100px", right: "-100px",
+            width: 400, height: 400, borderRadius: "50%",
+            background: `radial-gradient(circle, ${atmosphere.glow}40 0%, transparent 70%)`,
+            filter: "blur(60px)",
+            pointerEvents: "none",
+            animation: "floatGlow 20s ease-in-out infinite",
+            willChange: "transform",
+          }} />
+          <div style={{
+            position: "fixed", bottom: "-100px", left: "-100px",
+            width: 350, height: 350, borderRadius: "50%",
+            background: `radial-gradient(circle, ${T.accent}25 0%, transparent 70%)`,
+            filter: "blur(60px)",
+            pointerEvents: "none",
+            animation: "floatGlow 25s ease-in-out infinite reverse",
+            willChange: "transform",
+          }} />
+        </>
+      )}
+      {disableHeavyFx && (
+        // Versión liviana: un solo radial estático sin blur (sin coste de paint continuo)
+        <div style={{
+          position: "fixed", top: "-80px", right: "-80px",
+          width: 280, height: 280, borderRadius: "50%",
+          background: `radial-gradient(circle, ${atmosphere.glow}33 0%, transparent 65%)`,
+          pointerEvents: "none",
+        }} />
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&display=swap');
