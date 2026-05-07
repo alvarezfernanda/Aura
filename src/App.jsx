@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspens
 // Reduce el bundle inicial y acelera el primer paint en Android.
 const VoiceNotesPage = lazy(() => import("./voiceNotes.jsx"));
 const NotesSearchPage = lazy(() => import("./notesSearch.jsx"));
+const CycleTimelinePage = lazy(() => import("./timeline.jsx"));
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -8463,6 +8464,7 @@ export default function Aura() {
           cycleType={cycleType}
           onBack={() => setPage("home")}
           onOpenSearch={() => setPage("search")}
+          onOpenTimeline={() => setPage("timeline")}
         />
       </Suspense>
     ),
@@ -8481,6 +8483,27 @@ export default function Aura() {
           workoutMap={workoutMap}
           lastPeriod={lastPeriod}
           cycleType={cycleType}
+          onBack={() => setPage("notes")}
+        />
+      </Suspense>
+    ),
+    timeline: (
+      <Suspense fallback={
+        <div style={{
+          padding: "40px 0", textAlign: "center",
+          color: T.inkSoft, fontFamily: FONT_SANS, fontSize: 13,
+        }}>Cargando línea de tiempo…</div>
+      }>
+        <CycleTimelinePage
+          historialEj={historialEj}
+          sesionesGym={sesionesGym}
+          sesionesPilates={sesionesPilates}
+          sesionesCuello={sesionesCuello}
+          painLog={painLog}
+          cycleHistory={cycleHistory}
+          lastPeriod={lastPeriod}
+          cycleType={cycleType}
+          workoutMap={workoutMap}
           onBack={() => setPage("notes")}
         />
       </Suspense>
