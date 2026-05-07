@@ -8,6 +8,7 @@ import { NARRATIVE_SEASONS, SEASON_CYCLE_LENGTH, calcNarrativeSeason } from "./s
 import { CYCLE_PHASES, calcCyclePhase } from "./src/lib/cycle.js";
 import { suggestWeight } from "./src/lib/training.js";
 import { detectFertileWindow, detectPatterns } from "./src/lib/cycle-insights.js";
+import { useStorage } from "./src/hooks/useStorage.js";
 
 /* ============================================================
    AURA — Bienestar con contexto total
@@ -2636,50 +2637,6 @@ function ReminderParchment({ reminder, onDismiss, onAction, style = {} }) {
       )}
     </div>
   );
-}
-
-function useStorage(key, initialValue) {
-  const [value, setValue] = useState(initialValue);
-
-  // Hacer compatible con Claude.ai (window.storage async) y navegador (localStorage sync)
-  useEffect(() => {
-    (async () => {
-      try {
-        if (typeof window === "undefined") return;
-        // Preferir window.storage (Claude.ai) si existe
-        if (window.storage && typeof window.storage.get === "function") {
-          const res = await window.storage.get(key);
-          if (res && res.value) setValue(JSON.parse(res.value));
-          return;
-        }
-        // Fallback: localStorage del navegador
-        if (window.localStorage) {
-          const raw = window.localStorage.getItem(key);
-          if (raw !== null && raw !== undefined) {
-            setValue(JSON.parse(raw));
-          }
-        }
-      } catch (e) {}
-    })();
-  }, [key]);
-
-  const save = useCallback(async (newValOrFn) => {
-    setValue((prev) => {
-      const newVal = typeof newValOrFn === "function" ? newValOrFn(prev) : newValOrFn;
-      try {
-        if (typeof window !== "undefined") {
-          if (window.storage && typeof window.storage.set === "function") {
-            window.storage.set(key, JSON.stringify(newVal)).catch(() => {});
-          } else if (window.localStorage) {
-            window.localStorage.setItem(key, JSON.stringify(newVal));
-          }
-        }
-      } catch (e) {}
-      return newVal;
-    });
-  }, [key]);
-
-  return [value, save];
 }
 
 const WORKOUT_DAYS = {
